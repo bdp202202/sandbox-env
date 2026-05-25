@@ -205,6 +205,23 @@ if ($SkipDocker) {
         Install-Module -Name DockerMsftProvider -Repository PSGallery -Force
         Install-Package -Name docker -ProviderName DockerMsftProvider -Force
 
+        # Add Docker bin dir to Machine PATH + profile so all new terminals find it
+        $dockerBinDir = "$env:ProgramFiles\Docker"
+        if ($isAdmin) {
+            $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+            if ($machinePath -notlike "*$dockerBinDir*") {
+                [Environment]::SetEnvironmentVariable("PATH", "$machinePath;$dockerBinDir", "Machine")
+                Write-Host "Added to Machine PATH: $dockerBinDir" -ForegroundColor Green
+            } else {
+                Write-Host "Machine PATH already contains: $dockerBinDir" -ForegroundColor Green
+            }
+        }
+        $dockerProfileLine = "`$env:PATH = `"$dockerBinDir;`$env:PATH`""
+        if (-not (Test-Path $PROFILE) -or -not (Select-String -Path $PROFILE -Pattern ([regex]::Escape($dockerBinDir)) -Quiet)) {
+            Add-Content -Path $PROFILE -Value "`n# Docker`n$dockerProfileLine"
+            Write-Host "Added docker dir to PowerShell profile: $PROFILE" -ForegroundColor Green
+        }
+
         Refresh-EnvPath
 
         # Install Docker Compose V2 as a CLI plugin
