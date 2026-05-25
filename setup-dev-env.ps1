@@ -14,9 +14,11 @@
 # Usage:
 #   PowerShell: .\setup-dev-env.ps1
 #   Skip Docker: .\setup-dev-env.ps1 -SkipDocker
+#   Custom browser: .\setup-dev-env.ps1 -BrowserPath "C:\Program Files\Google\Chrome\Application\chrome.exe"
 
 param(
-    [switch]$SkipDocker
+    [switch]$SkipDocker,
+    [string]$BrowserPath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 )
 
 $ErrorActionPreference = "Continue"
@@ -164,17 +166,50 @@ if ($SkipDocker) {
     Write-Host ""
     Write-Host "[4/5] Docker installation skipped (-SkipDocker)" -ForegroundColor Yellow
 } else {
-    Write-Step "4/5" "Installing Docker Desktop (includes docker compose)"
+    Write-Step "4/5" "Installing Docker (includes docker compose)"
+
+    # Detect Windows Server — Docker Desktop requires Windows 10/11 client OS
+    $osCaption = (Get-WmiObject Win32_OperatingSystem).Caption
+    $isWindowsServer = $osCaption -like "*Server*"
 
     if (Test-Command "docker") {
         Write-Host "Docker already installed: $(docker --version)" -ForegroundColor Green
+    } elseif ($isWindowsServer) {
+        Write-Host "  Windows Server detected ($osCaption)" -ForegroundColor Yellow
+        Write-Host "  Installing Docker Engine via DockerMsftProvider (not Docker Desktop)..."
+
+        # Install NuGet provider silently if needed
+        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+
+        Install-Module -Name DockerMsftProvider -Repository PSGallery -Force
+        Install-Package -Name docker -ProviderName DockerMsftProvider -Force
+
+        Refresh-EnvPath
+
+        # Install Docker Compose V2 as a CLI plugin
+        Write-Host "  Installing Docker Compose V2 plugin..."
+        $composeDir = "$env:ProgramData\Docker\cli-plugins"
+        New-Item -ItemType Directory -Force -Path $composeDir | Out-Null
+        $composeUrl = "https://github.com/docker/compose/releases/latest/download/docker-compose-windows-x86_64.exe"
+        Invoke-WebRequest -Uri $composeUrl -OutFile "$composeDir\docker-compose.exe" -UseBasicParsing
+
+        Write-Host "Docker Engine installed." -ForegroundColor Green
+        Write-Host "[WARN] A system RESTART is required to start the Docker service." -ForegroundColor Yellow
+        Write-Host "       After restart, start Docker with: Start-Service docker" -ForegroundColor Yellow
     } else {
-        Write-Host "Enabling WSL2 and Hyper-V features (may require restart)..."
+        Write-Host "  Windows client OS detected — installing Docker Desktop..."
+        Write-Host "  Enabling WSL2 and Hyper-V features (may require restart)..."
         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart 2>&1 | Out-Null
         dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>&1 | Out-Null
 
         Install-Package "Docker.DockerDesktop" "docker-desktop"
         Refresh-EnvPath
+
+        $dockerDesktopExe = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+        if ((Test-Path $dockerDesktopExe) -and (-not (Get-Process "Docker Desktop" -ErrorAction SilentlyContinue))) {
+            Write-Host "Starting Docker Desktop daemon in background..." -ForegroundColor Yellow
+            Start-Process $dockerDesktopExe -WindowStyle Minimized
+        }
 
         if (Test-Command "docker") {
             Write-Host "Docker Desktop installed: $(docker --version)" -ForegroundColor Green
@@ -182,12 +217,6 @@ if ($SkipDocker) {
             Write-Host "[WARN] Docker not found in PATH yet." -ForegroundColor Yellow
             Write-Host "       Start Docker Desktop and restart terminal if 'docker compose' fails." -ForegroundColor Yellow
         }
-    }
-
-    $dockerDesktopExe = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-    if ((Test-Path $dockerDesktopExe) -and (-not (Get-Process "Docker Desktop" -ErrorAction SilentlyContinue))) {
-        Write-Host "Starting Docker Desktop daemon in background..." -ForegroundColor Yellow
-        Start-Process $dockerDesktopExe -WindowStyle Minimized
     }
 }
 
@@ -199,6 +228,15 @@ Write-Host "A browser window will open for authentication." -ForegroundColor Yel
 Write-Host "Complete the sign-in, then return to this terminal." -ForegroundColor Yellow
 Write-Host "If the browser does not open, press 'c' to copy the login URL." -ForegroundColor Yellow
 Write-Host ""
+
+# Set preferred browser (avoids IE/Edge issues on Windows Server)
+if (Test-Path $BrowserPath) {
+    $env:BROWSER = $BrowserPath
+    Write-Host "Using browser: $BrowserPath" -ForegroundColor Green
+} else {
+    Write-Host "[WARN] Browser not found at: $BrowserPath" -ForegroundColor Yellow
+    Write-Host "       Login will use the system default browser." -ForegroundColor Yellow
+}
 
 if (Test-Path $claudeExe) {
     & $claudeExe auth login
