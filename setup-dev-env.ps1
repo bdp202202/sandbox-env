@@ -3,9 +3,11 @@
 #
 # Installs and configures:
 #   - Git for Windows
+#   - Node.js LTS (required for npx)
 #   - Claude Code (with PATH fix)
 #   - Docker Desktop (includes docker compose)
 #   - Claude login (pauses for manual browser auth)
+#   - Claude plugins: superpowers, mattpocock/skills
 #
 # Usage:
 #   PowerShell: .\setup-dev-env.ps1
@@ -52,7 +54,7 @@ Write-Host "================================================" -ForegroundColor C
 
 # ── Step 1: Git ───────────────────────────────────────────────────────────────
 
-Write-Step "1/4" "Installing Git for Windows"
+Write-Step "1/5" "Installing Git for Windows"
 
 if (Test-Command "git") {
     Write-Host "Git already installed: $(git --version)" -ForegroundColor Green
@@ -67,16 +69,29 @@ if (Test-Command "git") {
     }
 }
 
-# ── Step 2: Claude Code ───────────────────────────────────────────────────────
+# ── Step 2: Node.js LTS ───────────────────────────────────────────────────────
 
-Write-Step "2/4" "Installing Claude Code"
+Write-Step "2/5" "Installing Node.js LTS (required for npx)"
+
+if (Test-Command "node") {
+    Write-Host "Node.js already installed: $(node --version)" -ForegroundColor Green
+} else {
+    winget install --id OpenJS.NodeJS.LTS -e --source winget `
+        --accept-package-agreements --accept-source-agreements --silent
+    Refresh-EnvPath
+    if (Test-Command "node") {
+        Write-Host "Node.js installed: $(node --version), npm: $(npm --version)" -ForegroundColor Green
+    } else {
+        Write-Host "[WARN] Node.js not found after install. Restart terminal if needed." -ForegroundColor Yellow
+    }
+}
+
+# ── Step 3: Claude Code + PATH ────────────────────────────────────────────────
+
+Write-Step "3/5" "Installing Claude Code"
 
 Write-Host "Running Claude Code PowerShell installer..."
 irm https://claude.ai/install.ps1 | iex
-
-# ── Step 3: PATH for Claude Code ─────────────────────────────────────────────
-
-Write-Step "3/4" "Configuring PATH for Claude Code"
 
 $claudeDir = "$env:USERPROFILE\.local\bin"
 $userPath  = [Environment]::GetEnvironmentVariable("PATH", "User")
@@ -89,10 +104,8 @@ if ($userPath -notlike "*$claudeDir*") {
     Write-Host "PATH already contains: $claudeDir" -ForegroundColor Green
 }
 
-# Apply immediately in this session
 Refresh-EnvPath
 
-# Verify
 $claudeExe = "$claudeDir\claude.exe"
 if (Test-Path $claudeExe) {
     $ver = & $claudeExe --version 2>&1
@@ -102,18 +115,17 @@ if (Test-Path $claudeExe) {
     Write-Host "       Try restarting PowerShell after setup completes." -ForegroundColor Yellow
 }
 
-# ── Step 4: Docker Desktop (includes docker compose) ─────────────────────────
+# ── Step 4: Docker Desktop ────────────────────────────────────────────────────
 
 if ($SkipDocker) {
     Write-Host ""
-    Write-Host "[4/4] Docker installation skipped (-SkipDocker)" -ForegroundColor Yellow
+    Write-Host "[4/5] Docker installation skipped (-SkipDocker)" -ForegroundColor Yellow
 } else {
-    Write-Step "4/4" "Installing Docker Desktop (includes docker compose)"
+    Write-Step "4/5" "Installing Docker Desktop (includes docker compose)"
 
     if (Test-Command "docker") {
         Write-Host "Docker already installed: $(docker --version)" -ForegroundColor Green
     } else {
-        # Enable WSL2 features required by Docker Desktop
         Write-Host "Enabling WSL2 and Hyper-V features (may require restart)..."
         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart 2>&1 | Out-Null
         dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>&1 | Out-Null
@@ -130,22 +142,17 @@ if ($SkipDocker) {
         }
     }
 
-    # Start Docker Desktop daemon if installed but not running
     $dockerDesktopExe = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
     if ((Test-Path $dockerDesktopExe) -and (-not (Get-Process "Docker Desktop" -ErrorAction SilentlyContinue))) {
-        Write-Host "Starting Docker Desktop daemon..." -ForegroundColor Yellow
+        Write-Host "Starting Docker Desktop daemon in background..." -ForegroundColor Yellow
         Start-Process $dockerDesktopExe -WindowStyle Minimized
-        Write-Host "Docker Desktop starting in background (takes ~30 seconds)." -ForegroundColor Yellow
     }
 }
 
 # ── Step 5: Claude Login ──────────────────────────────────────────────────────
 
-Write-Host ""
-Write-Host "================================================" -ForegroundColor Cyan
-Write-Host "    Claude Code Login                           " -ForegroundColor Cyan
-Write-Host "================================================" -ForegroundColor Cyan
-Write-Host ""
+Write-Step "5/5" "Claude Code Login"
+
 Write-Host "A browser window will open for authentication." -ForegroundColor Yellow
 Write-Host "Complete the sign-in, then return to this terminal." -ForegroundColor Yellow
 Write-Host "If the browser does not open, press 'c' to copy the login URL." -ForegroundColor Yellow
@@ -159,6 +166,33 @@ if (Test-Path $claudeExe) {
     Write-Host "[ERROR] claude.exe not found. Open a new terminal and run: claude auth login" -ForegroundColor Red
 }
 
+# ── Post-login: Install Claude plugins & skills ───────────────────────────────
+
+Write-Host ""
+Write-Host "================================================" -ForegroundColor Cyan
+Write-Host "    Installing Plugins & Skills                 " -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
+
+# superpower plugin
+Write-Host ""
+Write-Host "[plugin 1/2] Installing superpowers plugin..." -ForegroundColor Yellow
+if (Test-Path $claudeExe) {
+    & $claudeExe plugin install superpowers@claude-plugins-official
+} elseif (Test-Command "claude") {
+    claude plugin install superpowers@claude-plugins-official
+} else {
+    Write-Host "[SKIP] claude not found. Run manually: claude plugin install superpowers@claude-plugins-official" -ForegroundColor Yellow
+}
+
+# mattpocock skills (via npx)
+Write-Host ""
+Write-Host "[plugin 2/2] Installing mattpocock/skills via npx..." -ForegroundColor Yellow
+if (Test-Command "npx") {
+    npx skills@latest add mattpocock/skills
+} else {
+    Write-Host "[SKIP] npx not found. Restart terminal then run: npx skills@latest add mattpocock/skills" -ForegroundColor Yellow
+}
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 Write-Host ""
@@ -168,11 +202,11 @@ Write-Host "================================================" -ForegroundColor G
 Write-Host ""
 Write-Host "Verify your tools:" -ForegroundColor Cyan
 Write-Host "  git --version" -ForegroundColor White
+Write-Host "  node --version  /  npx --version" -ForegroundColor White
 Write-Host "  claude --version" -ForegroundColor White
-Write-Host "  docker --version" -ForegroundColor White
-Write-Host "  docker compose version" -ForegroundColor White
+Write-Host "  docker --version  /  docker compose version" -ForegroundColor White
 Write-Host ""
 Write-Host "Notes:" -ForegroundColor Yellow
-Write-Host "  - If 'docker compose' fails, wait for Docker Desktop to finish starting." -ForegroundColor Yellow
+Write-Host "  - If 'docker compose' fails, wait for Docker Desktop to finish starting (~30s)." -ForegroundColor Yellow
 Write-Host "  - If PATH changes aren't picked up, open a new PowerShell window." -ForegroundColor Yellow
 Write-Host "  - Docker Desktop requires WSL2 or Hyper-V. A restart may be needed on first run." -ForegroundColor Yellow
