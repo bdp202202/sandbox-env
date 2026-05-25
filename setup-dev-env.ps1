@@ -23,7 +23,7 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-# ── Helpers ────────────────────────────────────────────────────────────────────────────────
+# ── Helpers ─────────────────────────────────────────────────
 
 function Write-Step([string]$n, [string]$msg) {
     Write-Host ""
@@ -41,11 +41,9 @@ function Test-Command([string]$cmd) {
     return [bool](Get-Command $cmd -ErrorAction SilentlyContinue)
 }
 
-# Install a package using winget if available, otherwise Chocolatey.
-# $wingetId  : e.g. "Git.Git"
-# $chocoName : e.g. "git"
-# $wingetArgs: extra winget flags array (optional)
-function Install-Package([string]$wingetId, [string]$chocoName, [string[]]$wingetArgs = @()) {
+# Install an app via winget (preferred) or Chocolatey fallback.
+# Avoids naming conflict with the built-in Install-Package cmdlet used for DockerMsftProvider.
+function Install-App([string]$wingetId, [string]$chocoName, [string[]]$wingetArgs = @()) {
     if (Test-Command "winget") {
         Write-Host "  Using winget to install $wingetId..."
         $baseArgs = @("install", "--id", $wingetId, "-e", "--source", "winget",
@@ -59,7 +57,7 @@ function Install-Package([string]$wingetId, [string]$chocoName, [string[]]$winge
     }
 }
 
-# ── Admin check ─────────────────────────────────────────────────────────────────────────────
+# ── Admin check ─────────────────────────────────────────────────
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator
@@ -74,7 +72,7 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host "    Development Environment Setup               " -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
-# ── Package manager bootstrap ─────────────────────────────────────────────────────────────────
+# ── Package manager bootstrap ─────────────────────────────────────────────
 
 if (-not (Test-Command "winget")) {
     Write-Host ""
@@ -99,14 +97,14 @@ if (-not (Test-Command "winget")) {
     Write-Host "[prep] winget found: $(winget --version)" -ForegroundColor Green
 }
 
-# ── Step 1: Git ──────────────────────────────────────────────────────────────────────────────
+# ── Step 1: Git ─────────────────────────────────────────────────
 
 Write-Step "1/5" "Installing Git for Windows"
 
 if (Test-Command "git") {
     Write-Host "Git already installed: $(git --version)" -ForegroundColor Green
 } else {
-    Install-Package "Git.Git" "git"
+    Install-App "Git.Git" "git"
     Refresh-EnvPath
     if (Test-Command "git") {
         Write-Host "Git installed: $(git --version)" -ForegroundColor Green
@@ -115,14 +113,14 @@ if (Test-Command "git") {
     }
 }
 
-# ── Step 2: Node.js LTS ───────────────────────────────────────────────────────────────────────────
+# ── Step 2: Node.js LTS ─────────────────────────────────────────────
 
 Write-Step "2/5" "Installing Node.js LTS (required for npx)"
 
 if (Test-Command "node") {
     Write-Host "Node.js already installed: $(node --version)" -ForegroundColor Green
 } else {
-    Install-Package "OpenJS.NodeJS.LTS" "nodejs-lts"
+    Install-App "OpenJS.NodeJS.LTS" "nodejs-lts"
     Refresh-EnvPath
     if (Test-Command "node") {
         Write-Host "Node.js installed: $(node --version), npm: $(npm --version)" -ForegroundColor Green
@@ -131,7 +129,7 @@ if (Test-Command "node") {
     }
 }
 
-# ── Step 3: Claude Code + PATH ────────────────────────────────────────────────────────────────────────
+# ── Step 3: Claude Code + PATH ───────────────────────────────────────────
 
 Write-Step "3/5" "Installing Claude Code"
 
@@ -181,7 +179,7 @@ if (Test-Path $claudeExe) {
     Write-Host "       Try restarting PowerShell after setup completes." -ForegroundColor Yellow
 }
 
-# ── Step 4: Docker ─────────────────────────────────────────────────────────────────────────────
+# ── Step 4: Docker ───────────────────────────────────────────────
 
 if ($SkipDocker) {
     Write-Host ""
@@ -240,7 +238,7 @@ if ($SkipDocker) {
         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart 2>&1 | Out-Null
         dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>&1 | Out-Null
 
-        Install-Package "Docker.DockerDesktop" "docker-desktop"
+        Install-App "Docker.DockerDesktop" "docker-desktop"
         Refresh-EnvPath
 
         $dockerDesktopExe = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
@@ -258,7 +256,7 @@ if ($SkipDocker) {
     }
 }
 
-# ── Step 5: Claude Login ───────────────────────────────────────────────────────────────────────────
+# ── Step 5: Claude Login ─────────────────────────────────────────────
 
 Write-Step "5/5" "Claude Code Login"
 
@@ -294,7 +292,7 @@ if (Test-Path $claudeExe) {
     Write-Host "[ERROR] claude.exe not found. Open a new terminal and run: claude auth login" -ForegroundColor Red
 }
 
-# ── Post-login: Install Claude plugins & skills ─────────────────────────────────────────────────
+# ── Post-login: Install Claude plugins & skills ───────────────────────────
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
@@ -325,7 +323,7 @@ if (Test-Command "npx") {
     Write-Host "[SKIP] npx not found. Restart terminal then run: npx skills@latest add mattpocock/skills" -ForegroundColor Yellow
 }
 
-# ── Done ──────────────────────────────────────────────────────────────────────────────────
+# ── Done ───────────────────────────────────────────────────
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Green
