@@ -160,7 +160,7 @@ if (Test-Path $claudeExe) {
     Write-Host "       Try restarting PowerShell after setup completes." -ForegroundColor Yellow
 }
 
-# ── Step 4: Docker Desktop ────────────────────────────────────────────────────
+# ── Step 4: Docker ────────────────────────────────────────────────────────────
 
 if ($SkipDocker) {
     Write-Host ""
@@ -229,10 +229,16 @@ Write-Host "Complete the sign-in, then return to this terminal." -ForegroundColo
 Write-Host "If the browser does not open, press 'c' to copy the login URL." -ForegroundColor Yellow
 Write-Host ""
 
-# Set preferred browser (avoids IE/Edge issues on Windows Server)
+# Set preferred browser (avoids IE/Edge issues on Windows Server).
+# Use executable name only — setting BROWSER to a full path with spaces causes
+# Claude Code to pass a malformed URL (e.g. http://"https//...") to the browser.
 if (Test-Path $BrowserPath) {
-    $env:BROWSER = $BrowserPath
-    Write-Host "Using browser: $BrowserPath" -ForegroundColor Green
+    $chromeDir = Split-Path $BrowserPath -Parent
+    if ($env:PATH -notlike "*$chromeDir*") {
+        $env:PATH = "$chromeDir;$env:PATH"
+    }
+    $env:BROWSER = "chrome"
+    Write-Host "Using browser: chrome (from $chromeDir)" -ForegroundColor Green
 } else {
     Write-Host "[WARN] Browser not found at: $BrowserPath" -ForegroundColor Yellow
     Write-Host "       Login will use the system default browser." -ForegroundColor Yellow
