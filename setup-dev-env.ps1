@@ -23,7 +23,7 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-# ── Helpers ─────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────
 
 function Write-Step([string]$n, [string]$msg) {
     Write-Host ""
@@ -42,7 +42,7 @@ function Test-Command([string]$cmd) {
 }
 
 # Install an app via winget (preferred) or Chocolatey fallback.
-# Avoids naming conflict with the built-in Install-Package cmdlet used for DockerMsftProvider.
+# Avoids naming conflict with the built-in Install-Package cmdlet.
 function Install-App([string]$wingetId, [string]$chocoName, [string[]]$wingetArgs = @()) {
     if (Test-Command "winget") {
         Write-Host "  Using winget to install $wingetId..."
@@ -57,7 +57,7 @@ function Install-App([string]$wingetId, [string]$chocoName, [string[]]$wingetArg
     }
 }
 
-# ── Admin check ───────────────────────────────────────────────
+# ── Admin check ─────────────────────────────────────────────
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator
@@ -195,17 +195,30 @@ if ($SkipDocker) {
         Write-Host "Docker already installed: $(docker --version)" -ForegroundColor Green
     } elseif ($isWindowsServer) {
         Write-Host "  Windows Server detected ($osCaption)" -ForegroundColor Yellow
-        Write-Host "  Installing Docker Engine via DockerMsftProvider (not Docker Desktop)..."
+        Write-Host "  Installing Docker Engine from download.docker.com (static zip)..."
 
-        # Install NuGet provider silently if needed
-        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
+        # Resolve latest Docker Engine version via GitHub API
+        try {
+            $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/moby/moby/releases/latest" -UseBasicParsing
+            $dockerVersion = $rel.tag_name -replace '^v', ''
+        } catch {
+            $dockerVersion = "27.3.1"
+        }
+        Write-Host "  Docker version: $dockerVersion"
 
-        Install-Module -Name DockerMsftProvider -Repository PSGallery -Force
-        Import-Module DockerMsftProvider
-        Install-Package -Name docker -ProviderName DockerMsftProvider -Force
+        $dockerZip = "$env:TEMP\docker-$dockerVersion.zip"
+        $dockerBinDir = "$env:ProgramFiles\docker"
+
+        Invoke-WebRequest -Uri "https://download.docker.com/win/static/stable/x86_64/docker-$dockerVersion.zip" `
+            -OutFile $dockerZip -UseBasicParsing
+        Expand-Archive -Path $dockerZip -DestinationPath $env:ProgramFiles -Force
+        Remove-Item $dockerZip -Force -ErrorAction SilentlyContinue
+
+        # Register dockerd as a Windows service
+        Write-Host "  Registering Docker service..."
+        & "$dockerBinDir\dockerd.exe" --register-service
 
         # Add Docker bin dir to Machine PATH + profile so all new terminals find it
-        $dockerBinDir = "$env:ProgramFiles\Docker"
         if ($isAdmin) {
             $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
             if ($machinePath -notlike "*$dockerBinDir*") {
@@ -230,7 +243,7 @@ if ($SkipDocker) {
         $composeUrl = "https://github.com/docker/compose/releases/latest/download/docker-compose-windows-x86_64.exe"
         Invoke-WebRequest -Uri $composeUrl -OutFile "$composeDir\docker-compose.exe" -UseBasicParsing
 
-        Write-Host "Docker Engine installed." -ForegroundColor Green
+        Write-Host "Docker Engine installed: $dockerBinDir\docker.exe" -ForegroundColor Green
         Write-Host "[WARN] A system RESTART is required to start the Docker service." -ForegroundColor Yellow
         Write-Host "       After restart, start Docker with: Start-Service docker" -ForegroundColor Yellow
     } else {
@@ -293,7 +306,7 @@ if (Test-Path $claudeExe) {
     Write-Host "[ERROR] claude.exe not found. Open a new terminal and run: claude auth login" -ForegroundColor Red
 }
 
-# ── Post-login: Install Claude plugins & skills ───────────────────────
+# ── Post-login: Install Claude plugins & skills ─────────────────────
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
@@ -324,7 +337,7 @@ if (Test-Command "npx") {
     Write-Host "[SKIP] npx not found. Restart terminal then run: npx skills@latest add mattpocock/skills" -ForegroundColor Yellow
 }
 
-# ── Done ───────────────────────────────────────────────
+# ── Done ─────────────────────────────────────────────
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Green
