@@ -246,9 +246,9 @@ if ($SkipDocker) {
 
         Refresh-EnvPath
 
-        # Install Docker Compose V2 as a CLI plugin
+        # Install Docker Compose V2 as a CLI plugin next to the docker binary
         Write-Host "  Installing Docker Compose V2 plugin..."
-        $composeDir = "$env:ProgramData\Docker\cli-plugins"
+        $composeDir = "$dockerBinDir\cli-plugins"
         New-Item -ItemType Directory -Force -Path $composeDir | Out-Null
         $composeUrl = "https://github.com/docker/compose/releases/latest/download/docker-compose-windows-x86_64.exe"
         Invoke-WebRequest -Uri $composeUrl -OutFile "$composeDir\docker-compose.exe" -UseBasicParsing
