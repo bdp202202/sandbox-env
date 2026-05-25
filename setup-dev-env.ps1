@@ -198,19 +198,29 @@ if ($SkipDocker) {
         Write-Host "  Installing Docker Engine from download.docker.com (static zip)..."
 
         # Resolve latest Docker Engine version via GitHub API
+        # moby/moby tags may be "v27.3.1" or "docker-v29.5.2" — strip both prefixes
         try {
             $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/moby/moby/releases/latest" -UseBasicParsing
-            $dockerVersion = $rel.tag_name -replace '^v', ''
+            $dockerVersion = $rel.tag_name -replace '^(docker-)?v', ''
         } catch {
-            $dockerVersion = "27.3.1"
+            $dockerVersion = "27.5.1"
+        }
+
+        # Verify the resolved URL actually exists; fall back to known-good version if not
+        $dockerUrl = "https://download.docker.com/win/static/stable/x86_64/docker-$dockerVersion.zip"
+        try {
+            Invoke-WebRequest -Uri $dockerUrl -Method Head -UseBasicParsing -ErrorAction Stop | Out-Null
+        } catch {
+            Write-Host "  Version $dockerVersion not available at download.docker.com, falling back to 27.5.1" -ForegroundColor Yellow
+            $dockerVersion = "27.5.1"
+            $dockerUrl = "https://download.docker.com/win/static/stable/x86_64/docker-$dockerVersion.zip"
         }
         Write-Host "  Docker version: $dockerVersion"
 
         $dockerZip = "$env:TEMP\docker-$dockerVersion.zip"
         $dockerBinDir = "$env:ProgramFiles\docker"
 
-        Invoke-WebRequest -Uri "https://download.docker.com/win/static/stable/x86_64/docker-$dockerVersion.zip" `
-            -OutFile $dockerZip -UseBasicParsing
+        Invoke-WebRequest -Uri $dockerUrl -OutFile $dockerZip -UseBasicParsing
         Expand-Archive -Path $dockerZip -DestinationPath $env:ProgramFiles -Force
         Remove-Item $dockerZip -Force -ErrorAction SilentlyContinue
 
