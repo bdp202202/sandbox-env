@@ -267,8 +267,10 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host ""
 Write-Host "[plugin 1/2] Installing superpowers plugin..." -ForegroundColor Yellow
 if (Test-Path $claudeExe) {
+    & $claudeExe plugin marketplace update claude-plugins-official
     & $claudeExe plugin install superpowers@claude-plugins-official
 } elseif (Test-Command "claude") {
+    claude plugin marketplace update claude-plugins-official
     claude plugin install superpowers@claude-plugins-official
 } else {
     Write-Host "[SKIP] claude not found. Run manually: claude plugin install superpowers@claude-plugins-official" -ForegroundColor Yellow
