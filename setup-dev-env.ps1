@@ -57,7 +57,7 @@ function Install-App([string]$wingetId, [string]$chocoName, [string[]]$wingetArg
     }
 }
 
-# ── Admin check ─────────────────────────────────────────────
+# ── Admin check ───────────────────────────────────────────
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator
@@ -72,7 +72,7 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host "    Development Environment Setup               " -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
-# ── Package manager bootstrap ─────────────────────────────────────────
+# ── Package manager bootstrap ───────────────────────────────────────────────
 
 if (-not (Test-Command "winget")) {
     Write-Host ""
@@ -97,7 +97,7 @@ if (-not (Test-Command "winget")) {
     Write-Host "[prep] winget found: $(winget --version)" -ForegroundColor Green
 }
 
-# ── Step 1: Git ───────────────────────────────────────────────
+# ── Step 1: Git ─────────────────────────────────────────────
 
 Write-Step "1/5" "Installing Git for Windows"
 
@@ -113,7 +113,7 @@ if (Test-Command "git") {
     }
 }
 
-# ── Step 2: Node.js LTS ───────────────────────────────────────────
+# ── Step 2: Node.js LTS ───────────────────────────────────────────────
 
 Write-Step "2/5" "Installing Node.js LTS (required for npx)"
 
@@ -129,7 +129,7 @@ if (Test-Command "node") {
     }
 }
 
-# ── Step 3: Claude Code + PATH ───────────────────────────────────────
+# ── Step 3: Claude Code + PATH ─────────────────────────────────────────────
 
 Write-Step "3/5" "Installing Claude Code"
 
@@ -179,7 +179,7 @@ if (Test-Path $claudeExe) {
     Write-Host "       Try restarting PowerShell after setup completes." -ForegroundColor Yellow
 }
 
-# ── Step 4: Docker ───────────────────────────────────────────
+# ── Step 4: Docker ───────────────────────────────────────────────
 
 if ($SkipDocker) {
     Write-Host ""
@@ -288,7 +288,7 @@ if ($SkipDocker) {
     }
 }
 
-# ── Step 5: Claude Login ─────────────────────────────────────────
+# ── Step 5: Claude Login ───────────────────────────────────────────────
 
 Write-Step "5/5" "Claude Code Login"
 
@@ -324,7 +324,7 @@ if (Test-Path $claudeExe) {
     Write-Host "[ERROR] claude.exe not found. Open a new terminal and run: claude auth login" -ForegroundColor Red
 }
 
-# ── Post-login: Install Claude plugins & skills ─────────────────────
+# ── Post-login: Install Claude plugins & skills ─────────────────────────────
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
@@ -355,7 +355,7 @@ if (Test-Command "npx") {
     Write-Host "[SKIP] npx not found. Restart terminal then run: npx skills@latest add mattpocock/skills" -ForegroundColor Yellow
 }
 
-# ── Done ─────────────────────────────────────────────
+# ── Done ─────────────────────────────────────────────────────
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Green
@@ -368,7 +368,11 @@ Write-Host "  node --version  /  npx --version" -ForegroundColor White
 Write-Host "  claude --version" -ForegroundColor White
 Write-Host "  docker --version  /  docker compose version" -ForegroundColor White
 Write-Host ""
+Write-Host "Test Docker on Windows Server (Windows containers, NOT linux hello-world):" -ForegroundColor Cyan
+Write-Host "  docker run mcr.microsoft.com/windows/nanoserver:ltsc2019 cmd /c echo Hello" -ForegroundColor White
+Write-Host ""
 Write-Host "Notes:" -ForegroundColor Yellow
-Write-Host "  - If 'docker compose' fails, wait for Docker Desktop to finish starting (~30s)." -ForegroundColor Yellow
+Write-Host "  - Windows Server uses Windows containers. Docker Hub's 'hello-world' image" -ForegroundColor Yellow
+Write-Host "    has no Windows Server 2019 manifest — use mcr.microsoft.com images instead." -ForegroundColor Yellow
 Write-Host "  - If PATH changes aren't picked up, open a new PowerShell window." -ForegroundColor Yellow
-Write-Host "  - Docker Desktop requires WSL2 or Hyper-V. A restart may be needed on first run." -ForegroundColor Yellow
+Write-Host "  - If 'docker compose' fails, restart terminal or check docker service status." -ForegroundColor Yellow
