@@ -229,20 +229,24 @@ Write-Host "Complete the sign-in, then return to this terminal." -ForegroundColo
 Write-Host "If the browser does not open, press 'c' to copy the login URL." -ForegroundColor Yellow
 Write-Host ""
 
-# Set preferred browser (avoids IE/Edge issues on Windows Server).
-# Use executable name only — setting BROWSER to a full path with spaces causes
-# Claude Code to pass a malformed URL (e.g. http://"https//...") to the browser.
-if (Test-Path $BrowserPath) {
-    $chromeDir = Split-Path $BrowserPath -Parent
-    if ($env:PATH -notlike "*$chromeDir*") {
-        $env:PATH = "$chromeDir;$env:PATH"
-    }
-    $env:BROWSER = "chrome"
-    Write-Host "Using browser: chrome (from $chromeDir)" -ForegroundColor Green
-} else {
-    Write-Host "[WARN] Browser not found at: $BrowserPath" -ForegroundColor Yellow
-    Write-Host "       Login will use the system default browser." -ForegroundColor Yellow
-}
+# Create a URL-fixing wrapper: Claude Code sometimes produces a malformed URL
+# (http://"https//...) due to quote/path issues. The wrapper fixes the pattern
+# before forwarding to Chrome.
+$wrapperPath = "$env:TEMP\claude-chrome-wrapper.ps1"
+Set-Content -Path $wrapperPath -Encoding UTF8 -Value @"
+# Join all args in case the URL was split on quote characters
+`$raw = (`$args -join '')
+# Fix: http://"https//... or http://https//... -> https://...
+`$url = `$raw -replace '^http://["`"]?https[/]+', 'https://'
+# Remove any stray quotes
+`$url = `$url -replace '["`"]', ''
+# Ensure the URL starts with https://
+if (`$url -notmatch '^https?://') { `$url = 'https://' + `$url }
+Start-Process -FilePath '$BrowserPath' -ArgumentList `$url
+"@
+
+$env:BROWSER = "powershell.exe -ExecutionPolicy Bypass -NoProfile -File `"$wrapperPath`""
+Write-Host "Browser wrapper created: $wrapperPath" -ForegroundColor Green
 
 if (Test-Path $claudeExe) {
     & $claudeExe auth login
