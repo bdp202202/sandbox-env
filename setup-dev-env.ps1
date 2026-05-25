@@ -139,14 +139,35 @@ Write-Host "Running Claude Code PowerShell installer..."
 irm https://claude.ai/install.ps1 | iex
 
 $claudeDir = "$env:USERPROFILE\.local\bin"
-$userPath  = [Environment]::GetEnvironmentVariable("PATH", "User")
-if ($null -eq $userPath) { $userPath = "" }
 
+# User PATH
+$userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+if ($null -eq $userPath) { $userPath = "" }
 if ($userPath -notlike "*$claudeDir*") {
     [Environment]::SetEnvironmentVariable("PATH", "$userPath;$claudeDir", "User")
     Write-Host "Added to User PATH: $claudeDir" -ForegroundColor Green
 } else {
-    Write-Host "PATH already contains: $claudeDir" -ForegroundColor Green
+    Write-Host "User PATH already contains: $claudeDir" -ForegroundColor Green
+}
+
+# Machine PATH — ensures every new terminal picks it up regardless of user context
+if ($isAdmin) {
+    $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+    if ($machinePath -notlike "*$claudeDir*") {
+        [Environment]::SetEnvironmentVariable("PATH", "$machinePath;$claudeDir", "Machine")
+        Write-Host "Added to Machine PATH: $claudeDir" -ForegroundColor Green
+    } else {
+        Write-Host "Machine PATH already contains: $claudeDir" -ForegroundColor Green
+    }
+}
+
+# PowerShell profile — belt-and-suspenders for new sessions
+$profileLine = "`$env:PATH = `"$claudeDir;`$env:PATH`""
+$profileDir  = Split-Path $PROFILE -Parent
+if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir | Out-Null }
+if (-not (Test-Path $PROFILE) -or -not (Select-String -Path $PROFILE -Pattern ([regex]::Escape($claudeDir)) -Quiet)) {
+    Add-Content -Path $PROFILE -Value "`n# Claude Code`n$profileLine"
+    Write-Host "Added claude dir to PowerShell profile: $PROFILE" -ForegroundColor Green
 }
 
 Refresh-EnvPath
