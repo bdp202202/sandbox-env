@@ -9,6 +9,8 @@
 #   - Claude login (pauses for manual browser auth)
 #   - Claude plugins: superpowers, mattpocock/skills
 #
+# Package manager: winget (preferred) with Chocolatey as automatic fallback
+#
 # Usage:
 #   PowerShell: .\setup-dev-env.ps1
 #   Skip Docker: .\setup-dev-env.ps1 -SkipDocker
@@ -37,6 +39,24 @@ function Test-Command([string]$cmd) {
     return [bool](Get-Command $cmd -ErrorAction SilentlyContinue)
 }
 
+# Install a package using winget if available, otherwise Chocolatey.
+# $wingetId  : e.g. "Git.Git"
+# $chocoName : e.g. "git"
+# $wingetArgs: extra winget flags array (optional)
+function Install-Package([string]$wingetId, [string]$chocoName, [string[]]$wingetArgs = @()) {
+    if (Test-Command "winget") {
+        Write-Host "  Using winget to install $wingetId..."
+        $baseArgs = @("install", "--id", $wingetId, "-e", "--source", "winget",
+                      "--accept-package-agreements", "--accept-source-agreements", "--silent")
+        winget @($baseArgs + $wingetArgs)
+    } elseif (Test-Command "choco") {
+        Write-Host "  Using Chocolatey to install $chocoName..."
+        choco install $chocoName -y --no-progress
+    } else {
+        Write-Host "[ERROR] Neither winget nor Chocolatey is available." -ForegroundColor Red
+    }
+}
+
 # ── Admin check ───────────────────────────────────────────────────────────────
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
@@ -52,6 +72,31 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host "    Development Environment Setup               " -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
+# ── Package manager bootstrap ─────────────────────────────────────────────────
+
+if (-not (Test-Command "winget")) {
+    Write-Host ""
+    Write-Host "[prep] winget not found — installing Chocolatey as package manager..." -ForegroundColor Yellow
+
+    if (-not (Test-Command "choco")) {
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol =
+            [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString(
+            'https://community.chocolatey.org/install.ps1'))
+        Refresh-EnvPath
+    }
+
+    if (Test-Command "choco") {
+        Write-Host "Chocolatey ready: $(choco --version)" -ForegroundColor Green
+    } else {
+        Write-Host "[ERROR] Could not install Chocolatey. Package installs may fail." -ForegroundColor Red
+    }
+} else {
+    Write-Host ""
+    Write-Host "[prep] winget found: $(winget --version)" -ForegroundColor Green
+}
+
 # ── Step 1: Git ───────────────────────────────────────────────────────────────
 
 Write-Step "1/5" "Installing Git for Windows"
@@ -59,8 +104,7 @@ Write-Step "1/5" "Installing Git for Windows"
 if (Test-Command "git") {
     Write-Host "Git already installed: $(git --version)" -ForegroundColor Green
 } else {
-    winget install --id Git.Git -e --source winget `
-        --accept-package-agreements --accept-source-agreements --silent
+    Install-Package "Git.Git" "git"
     Refresh-EnvPath
     if (Test-Command "git") {
         Write-Host "Git installed: $(git --version)" -ForegroundColor Green
@@ -76,8 +120,7 @@ Write-Step "2/5" "Installing Node.js LTS (required for npx)"
 if (Test-Command "node") {
     Write-Host "Node.js already installed: $(node --version)" -ForegroundColor Green
 } else {
-    winget install --id OpenJS.NodeJS.LTS -e --source winget `
-        --accept-package-agreements --accept-source-agreements --silent
+    Install-Package "OpenJS.NodeJS.LTS" "nodejs-lts"
     Refresh-EnvPath
     if (Test-Command "node") {
         Write-Host "Node.js installed: $(node --version), npm: $(npm --version)" -ForegroundColor Green
@@ -130,8 +173,7 @@ if ($SkipDocker) {
         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart 2>&1 | Out-Null
         dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart 2>&1 | Out-Null
 
-        winget install --id Docker.DockerDesktop -e --source winget `
-            --accept-package-agreements --accept-source-agreements
+        Install-Package "Docker.DockerDesktop" "docker-desktop"
         Refresh-EnvPath
 
         if (Test-Command "docker") {
