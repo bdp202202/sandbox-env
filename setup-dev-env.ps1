@@ -197,6 +197,14 @@ if ($SkipDocker) {
         Write-Host "  Windows Server detected ($osCaption)" -ForegroundColor Yellow
         Write-Host "  Installing Docker Engine from download.docker.com (static zip)..."
 
+        # Enable Containers Windows Feature (required for Docker Engine on Windows Server)
+        $containersFeature = Get-WindowsFeature -Name Containers -ErrorAction SilentlyContinue
+        if ($containersFeature -and -not $containersFeature.Installed) {
+            Write-Host "  Enabling Containers Windows Feature..." -ForegroundColor Yellow
+            Install-WindowsFeature -Name Containers
+            Write-Host "  Containers feature enabled." -ForegroundColor Green
+        }
+
         # Resolve latest Docker Engine version via GitHub API
         # moby/moby tags may be "v27.3.1" or "docker-v29.5.2" — strip both prefixes
         try {
