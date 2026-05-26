@@ -72,6 +72,17 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host "    Development Environment Setup               " -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
+# ── Console font: MingLiU for Traditional Chinese input ─────────────────
+$psConsolePath = "HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe"
+if (-not (Test-Path $psConsolePath)) {
+    New-Item -Path $psConsolePath -Force | Out-Null
+}
+Set-ItemProperty -Path $psConsolePath -Name "FaceName"   -Value "MingLiU" -Type String
+Set-ItemProperty -Path $psConsolePath -Name "FontFamily" -Value 0x36      -Type DWord
+Set-ItemProperty -Path $psConsolePath -Name "FontWeight" -Value 400       -Type DWord
+Write-Host "[font] PowerShell console font set to MingLiU (Traditional Chinese input enabled)" -ForegroundColor Green
+Write-Host "       Re-open PowerShell after setup for the font change to take effect." -ForegroundColor Yellow
+
 # ── Package manager bootstrap ───────────────────────────────────────────────
 
 if (-not (Test-Command "winget")) {
